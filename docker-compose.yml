@@ -1,0 +1,143 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-architecture_simulator}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+      - ./infra/postgres/monolith.sql:/docker-entrypoint-initdb.d/monolith.sql:ro
+      - ./infra/postgres/microservices.sql:/docker-entrypoint-initdb.d/microservices.sql:ro
+      - ./infra/postgres/event_sourcing.sql:/docker-entrypoint-initdb.d/event_sourcing.sql:ro
+
+  redis:
+    image: redis:7
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+
+  monolith-api:
+    build:
+      context: .
+      dockerfile: ./monolith/api/Dockerfile
+    ports:
+      - "${MONOLITH_API_PORT:-8000}:8000"
+    depends_on:
+      - postgres
+      - redis
+
+  submission-api:
+    build:
+      context: .
+      dockerfile: ./microservices/submission-api/Dockerfile
+    ports:
+      - "${SUBMISSION_API_PORT:-8001}:8000"
+    depends_on:
+      - postgres
+      - redis
+
+  status-api:
+    build:
+      context: .
+      dockerfile: ./microservices/status-api/Dockerfile
+    ports:
+      - "${STATUS_API_PORT:-8002}:8000"
+    depends_on:
+      - postgres
+      - redis
+
+  risk-service:
+    build:
+      context: .
+      dockerfile: ./microservices/risk-service/Dockerfile
+    depends_on:
+      - redis
+      - postgres
+    restart: unless-stopped
+
+  persistence-service:
+    build:
+      context: .
+      dockerfile: ./microservices/persistence-service/Dockerfile
+    depends_on:
+      - redis
+      - postgres
+    restart: unless-stopped
+
+  command-api:
+    build:
+      context: .
+      dockerfile: ./event-sourcing-cqrs/command-api/Dockerfile
+    ports:
+      - "${COMMAND_API_PORT:-8003}:8000"
+    depends_on:
+      - postgres
+
+  query-api:
+    build:
+      context: .
+      dockerfile: ./event-sourcing-cqrs/query-api/Dockerfile
+    ports:
+      - "${QUERY_API_PORT:-8004}:8000"
+    depends_on:
+      - postgres
+
+  cqrs-risk-processor:
+    build:
+      context: .
+      dockerfile: ./event-sourcing-cqrs/processors/Dockerfile
+    command: ["python", "risk_processor.py"]
+    working_dir: /app/event-sourcing-cqrs/processors
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+  cqrs-projection-processor:
+    build:
+      context: .
+      dockerfile: ./event-sourcing-cqrs/processors/Dockerfile
+    command: ["python", "projection_processor.py"]
+    working_dir: /app/event-sourcing-cqrs/processors
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  ui:
+    image: node:20
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port ${UI_PORT:-5173}"
+    volumes:
+      - ./ui:/app
+    ports:
+      - "${UI_PORT:-5173}:${UI_PORT:-5173}"
+    depends_on:
+      - monolith-api
+
+  gateway:
+    image: nginx:1.27-alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - ui
+      - monolith-api
+      - submission-api
+      - status-api
+      - risk-service
+      - persistence-service
+      - command-api
+      - query-api
+      - cqrs-risk-processor
+      - cqrs-projection-processor
+
+volumes:
+  postgres_data:
+  redis_data:

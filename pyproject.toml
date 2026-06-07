@@ -1,0 +1,15 @@
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+exclude = [
+  ".git",
+  ".venv",
+  "ui/node_modules",
+]
+
+[tool.ruff.lint]
+ignore = ["E402", "E501"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+pythonpath = ["."]
