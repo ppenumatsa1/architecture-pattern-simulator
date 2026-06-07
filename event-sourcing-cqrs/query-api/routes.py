@@ -50,9 +50,7 @@ def list_submissions(
         LIMIT :limit OFFSET :offset
         """)
     with session_scope() as session:
-        rows = (
-            session.execute(stmt, {"limit": limit, "offset": offset}).mappings().all()
-        )
+        rows = session.execute(stmt, {"limit": limit, "offset": offset}).mappings().all()
 
     return [
         {
@@ -61,18 +59,12 @@ def list_submissions(
             "applicantId": row["applicant_id"],
             "payload": row["payload"],
             "lastEventVersion": row["last_event_version"],
-            "submittedAt": (
-                row["submitted_at"].isoformat() if row["submitted_at"] else None
-            ),
+            "submittedAt": (row["submitted_at"].isoformat() if row["submitted_at"] else None),
             "risk": {
-                "score": (
-                    float(row["risk_score"]) if row["risk_score"] is not None else None
-                ),
+                "score": (float(row["risk_score"]) if row["risk_score"] is not None else None),
                 "level": row["risk_level"],
                 "factors": row["factors"] if row["factors"] is not None else [],
-                "evaluatedAt": (
-                    row["evaluated_at"].isoformat() if row["evaluated_at"] else None
-                ),
+                "evaluatedAt": (row["evaluated_at"].isoformat() if row["evaluated_at"] else None),
             },
         }
         for row in rows
@@ -100,11 +92,7 @@ def get_submission(submission_id: UUID) -> dict:
         """)
 
     with session_scope() as session:
-        row = (
-            session.execute(stmt, {"submission_id": submission_id})
-            .mappings()
-            .one_or_none()
-        )
+        row = session.execute(stmt, {"submission_id": submission_id}).mappings().one_or_none()
 
     if row is None:
         raise HTTPException(status_code=404, detail="Submission not found")
@@ -117,14 +105,10 @@ def get_submission(submission_id: UUID) -> dict:
         "lastEventVersion": row["last_event_version"],
         "submittedAt": row["submitted_at"].isoformat() if row["submitted_at"] else None,
         "risk": {
-            "score": (
-                float(row["risk_score"]) if row["risk_score"] is not None else None
-            ),
+            "score": (float(row["risk_score"]) if row["risk_score"] is not None else None),
             "level": row["risk_level"],
             "factors": row["factors"] if row["factors"] is not None else [],
-            "evaluatedAt": (
-                row["evaluated_at"].isoformat() if row["evaluated_at"] else None
-            ),
+            "evaluatedAt": (row["evaluated_at"].isoformat() if row["evaluated_at"] else None),
         },
     }
 
@@ -173,9 +157,7 @@ async def stream_submission_events(
                     "eventId": str(row["event_id"]),
                     "eventType": row["event_type"],
                     "eventData": row["event_data"],
-                    "occurredAt": (
-                        row["occurred_at"].isoformat() if row["occurred_at"] else None
-                    ),
+                    "occurredAt": (row["occurred_at"].isoformat() if row["occurred_at"] else None),
                 }
                 # Emit default SSE message events so browser onmessage receives CQRS updates.
                 yield f"id: {last_seen}\ndata: {json.dumps(payload)}\n\n"

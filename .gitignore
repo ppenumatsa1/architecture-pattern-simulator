@@ -10,11 +10,14 @@ env/
 .mypy_cache/
 .coverage
 htmlcov/
+*.egg-info/
+*.egg-info
 
 # Node / frontend
 node_modules/
 dist/
 coverage/
+ui/test-results/
 .npm/
 .pnpm-store/
 

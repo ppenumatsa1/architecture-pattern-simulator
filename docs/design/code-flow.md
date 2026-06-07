@@ -15,23 +15,25 @@
 
 ## 2) Microservices flow
 
-1. `POST /api/microservices/submissions` (submission-api).
-2. submission-api stores initial submission + `submission_received` timeline event in Postgres.
-3. submission-api publishes message to Redis `submission_requests`.
-4. risk-service consumes request, evaluates risk, writes `risk_scored`/`manual_review_requested` timeline events, publishes to `risk_results`.
-5. persistence-service consumes `risk_results`, upserts risk summary, updates submission status/version, writes final timeline event.
-6. UI reads status and streams events from status-api (`microservices.timeline_events`).
+1. `POST /api/microservices/submissions` (micro-submission-api).
+2. micro-submission-api stores initial submission + `submission_received` timeline event + outbox row in one DB transaction.
+3. micro-outbox-publisher reads pending outbox rows and publishes to Redis `submission_requests`.
+4. micro-risk-service consumes request, evaluates risk, writes `risk_scored`/`manual_review_requested` timeline events, and writes `risk_results` outbox rows.
+5. micro-outbox-publisher publishes `risk_results` rows; micro-persistence-service consumes them, upserts risk summary, updates status/version, and writes final timeline event.
+6. UI reads status and streams events from micro-status-api (`microservices.timeline_events`).
 
 ## 3) Event Sourcing + CQRS flow
 
-1. `POST /api/event-sourcing/commands/create-submission` (command-api).
-2. command-api appends `submission.created` to `event_store` (optimistic concurrency) and publishes to Redis `domain_events`.
-3. risk processor consumes domain event, emits derived events (`risk.scoring.started`, `risk.scored`, decision event) back to event store + Redis.
-4. projection processor reads event store sequence and updates:
+1. `POST /api/event-sourcing/commands/create-submission` (cqrs-command-api).
+2. cqrs-command-api appends `submission.created` to `event_store` and writes outbox rows in the same transaction.
+3. cqrs-outbox-worker publishes pending outbox rows to Redis `domain_events`.
+4. cqrs-risk-worker consumes `domain_events` and appends derived domain events (`risk.scoring.started`, `risk.scored`, decision event) + outbox rows.
+5. cqrs-outbox-worker publishes derived outbox rows to `domain_events`.
+6. cqrs-projection-worker reads event store sequence and updates:
    - `submission_read_model`
    - `risk_summary_read_model`
    - `timeline_events`
-5. query-api serves read endpoints + SSE from projection tables.
+7. cqrs-query-api serves read endpoints + SSE from projection tables.
 
 ## Gateway routing note
 
@@ -39,8 +41,8 @@ Nginx maps `/api/{mode}/...` routes to the correct backend service and disables 
 
 ## Runtime note
 
-`docker-compose.yml` starts UI, gateway, APIs, Postgres, and Redis.  
-Async workers (`microservices/risk-service`, `microservices/persistence-service`) and CQRS processors (`event-sourcing-cqrs/processors`) are available in-repo and can be started separately for full end-to-end async progression.
+`docker-compose.yml` starts UI, gateway, APIs, Postgres, Redis, worker/processors, and outbox publishers.  
+Running workers manually is for debugging only when not using Compose.
 
 ## Related docs
 

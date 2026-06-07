@@ -17,7 +17,6 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from shared.python.db import session_scope
-from shared.python.redis_client import RedisStreams
 
 router = APIRouter()
 
@@ -40,6 +39,13 @@ def create_submission(payload: dict[str, Any]) -> dict[str, Any]:
     request = _validate_submission_payload(payload)
     submission_id = f"subm_{uuid4().hex}"
     received_at = datetime.now(tz=timezone.utc)
+
+    stream_payload = {
+        "submission_id": submission_id,
+        "applicant_id": request.applicant_id,
+        "payload": request.payload,
+        "received_at": received_at.isoformat(),
+    }
 
     try:
         with session_scope() as session:
@@ -90,22 +96,28 @@ def create_submission(payload: dict[str, Any]) -> dict[str, Any]:
                     "occurred_at": received_at,
                 },
             )
+
+            session.execute(
+                text("""
+                    INSERT INTO microservices.outbox_messages (
+                        stream_name,
+                        message_key,
+                        payload
+                    ) VALUES (
+                        'submission_requests',
+                        :message_key,
+                        CAST(:payload AS JSONB)
+                    )
+                    ON CONFLICT DO NOTHING
+                    """),
+                {
+                    "message_key": submission_id,
+                    "payload": json.dumps(stream_payload),
+                },
+            )
     except SQLAlchemyError as exc:
         raise HTTPException(
             status_code=500, detail="Failed to persist submission"
-        ) from exc
-
-    stream_payload = {
-        "submission_id": submission_id,
-        "applicant_id": request.applicant_id,
-        "payload": request.payload,
-        "received_at": received_at.isoformat(),
-    }
-    try:
-        RedisStreams().publish_submission_request(stream_payload)
-    except Exception as exc:  # pragma: no cover - network/runtime failure
-        raise HTTPException(
-            status_code=503, detail="Submission accepted but queue publish failed"
         ) from exc
 
     return {

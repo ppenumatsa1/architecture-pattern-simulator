@@ -60,6 +60,7 @@ def create_submission(payload: dict[str, Any]) -> dict[str, Any]:
             risk = evaluate_risk(
                 Submission(id=str(submission_id), payload=request.payload)
             )
+            bounded_score = _bound_risk_score(risk.score)
             mapped_level = _map_risk_level(risk.score)
             computed_state = _compute_state(mapped_level)
 
@@ -70,7 +71,7 @@ def create_submission(payload: dict[str, Any]) -> dict[str, Any]:
                     """),
                 {
                     "submission_id": submission_id,
-                    "risk_score": Decimal(str(risk.score)),
+                    "risk_score": Decimal(str(bounded_score)),
                     "risk_level": mapped_level,
                     "factors": json.dumps(risk.reasons),
                 },
@@ -99,7 +100,7 @@ def create_submission(payload: dict[str, Any]) -> dict[str, Any]:
                         submission_id=submission_id,
                         event_type="risk_scored",
                         data={
-                            "score": risk.score,
+                            "score": bounded_score,
                             "risk_level": mapped_level,
                             "factors": risk.reasons,
                         },
@@ -146,8 +147,16 @@ def create_submission(payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "submission_id": submission_id,
         "state": computed_state,
-        "risk": {"score": risk.score, "level": mapped_level, "factors": risk.reasons},
+        "risk": {
+            "score": bounded_score,
+            "level": mapped_level,
+            "factors": risk.reasons,
+        },
     }
+
+
+def _bound_risk_score(score: float | int) -> float:
+    return max(0.0, min(100.0, float(score)))
 
 
 def get_submission(submission_id: int) -> dict[str, Any]:
@@ -357,6 +366,8 @@ def _map_risk_level(score: int) -> str:
 
 
 def _compute_state(risk_level: str) -> str:
+    if risk_level == "critical":
+        return "rejected"
     if risk_level == "low":
         return "approved"
     return "under_review"

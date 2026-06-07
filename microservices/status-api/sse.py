@@ -63,9 +63,7 @@ def list_submissions(
                 .all()
             )
     except SQLAlchemyError as exc:
-        raise HTTPException(
-            status_code=500, detail="Failed to load submissions dashboard"
-        ) from exc
+        raise HTTPException(status_code=500, detail="Failed to load submissions dashboard") from exc
 
     return [
         {
@@ -76,9 +74,7 @@ def list_submissions(
             "receivedAt": _isoformat(row["received_at"]),
             "updatedAt": _isoformat(row["updated_at"]),
             "risk": {
-                "score": (
-                    float(row["risk_score"]) if row["risk_score"] is not None else None
-                ),
+                "score": (float(row["risk_score"]) if row["risk_score"] is not None else None),
                 "level": row["risk_level"],
                 "factors": row["factors"] or [],
                 "modelName": row["model_name"],
@@ -121,14 +117,10 @@ def get_submission(submission_id: str) -> dict[str, Any]:
                 .one_or_none()
             )
     except SQLAlchemyError as exc:
-        raise HTTPException(
-            status_code=500, detail="Failed to load submission"
-        ) from exc
+        raise HTTPException(status_code=500, detail="Failed to load submission") from exc
 
     if not row:
-        raise HTTPException(
-            status_code=404, detail=f"Submission {submission_id} not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Submission {submission_id} not found")
 
     return {
         "submissionId": row["submission_id"],
@@ -138,9 +130,7 @@ def get_submission(submission_id: str) -> dict[str, Any]:
         "receivedAt": _isoformat(row["received_at"]),
         "updatedAt": _isoformat(row["updated_at"]),
         "risk": {
-            "score": (
-                float(row["risk_score"]) if row["risk_score"] is not None else None
-            ),
+            "score": (float(row["risk_score"]) if row["risk_score"] is not None else None),
             "level": row["risk_level"],
             "factors": row["factors"] or [],
             "modelName": row["model_name"],
@@ -229,14 +219,10 @@ def ensure_submission_exists(submission_id: str) -> None:
                 {"submission_id": submission_id},
             ).scalar_one_or_none()
     except SQLAlchemyError as exc:
-        raise HTTPException(
-            status_code=500, detail="Failed to validate submission"
-        ) from exc
+        raise HTTPException(status_code=500, detail="Failed to validate submission") from exc
 
     if not exists:
-        raise HTTPException(
-            status_code=404, detail=f"Submission {submission_id} not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Submission {submission_id} not found")
 
 
 def _isoformat(value: datetime | None) -> str | None:

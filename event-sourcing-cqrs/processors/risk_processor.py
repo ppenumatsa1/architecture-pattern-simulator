@@ -102,7 +102,10 @@ def _to_domain_event(payload: dict) -> DomainEvent:
             "aggregate_id": payload.get("aggregate_id"),
             "aggregate_type": payload.get("aggregate_type"),
             "event_type": payload.get("event_type"),
-            "event_version": payload.get("event_version"),
+            "aggregate_version": payload.get(
+                "aggregate_version", payload.get("event_version")
+            ),
+            "schema_version": payload.get("schema_version", 1),
             "event_data": payload.get("event_data", {}),
             "metadata": payload.get("metadata", {}),
             "correlation_id": payload.get("correlation_id"),
@@ -125,8 +128,8 @@ def _emit_event(
         aggregate_type=source.aggregate_type,
         event_type=event_type,
         event_data=event_data,
+        schema_version=1,
         metadata={
-            "schema_version": 1,
             "producer": PROCESSOR_NAME,
         },
         correlation_id=source.correlation_id or source.event_id,

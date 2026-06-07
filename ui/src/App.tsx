@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getModeConfig } from './api/modeConfig';
 import {
   fetchApplicationsByMode,
@@ -34,24 +34,62 @@ function App() {
   const [connectionState, setConnectionState] = useState<StreamConnectionState>('idle');
   const [dataView, setDataView] = useState<DataViewResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const eventsRef = useRef<SimulationEvent[]>([]);
+  const submissionRawResultRef = useRef<unknown>(null);
   const activeModeConfig = useMemo(() => getModeConfig(mode), [mode]);
 
-  const refreshApplications = async (targetMode = mode) => {
-    setIsLoadingApplications(true);
-    try {
-      const rows = await fetchApplicationsByMode(targetMode, 100);
-      setApplications(rows);
-    } catch {
-      setApplications([]);
-    } finally {
-      setIsLoadingApplications(false);
-    }
-  };
+  useEffect(() => {
+    eventsRef.current = events;
+  }, [events]);
 
   useEffect(() => {
-    setCurrentPage(1);
-    void refreshApplications(mode);
-  }, [mode]);
+    submissionRawResultRef.current = submissionRawResult;
+  }, [submissionRawResult]);
+
+  const refreshApplications = useCallback(
+    async (targetMode: ArchitectureMode = mode) => {
+      setIsLoadingApplications(true);
+      try {
+        const rows = await fetchApplicationsByMode(targetMode, 100);
+        setApplications(rows);
+      } catch {
+        setApplications([]);
+      } finally {
+        setIsLoadingApplications(false);
+      }
+    },
+    [mode],
+  );
+
+  const refreshDataView = useCallback(
+    async (targetSubmissionId = submissionId, eventSnapshot?: SimulationEvent[]) => {
+      if (!targetSubmissionId) {
+        return;
+      }
+
+      setIsLoadingData(true);
+      try {
+        const data = await fetchSubmissionData(
+          mode,
+          targetSubmissionId,
+          eventSnapshot ?? eventsRef.current,
+          submissionRawResultRef.current,
+        );
+        setDataView(data);
+      } finally {
+        setIsLoadingData(false);
+      }
+    },
+    [mode, submissionId],
+  );
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void refreshApplications(mode);
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [mode, refreshApplications]);
 
   useEffect(() => {
     if (!submissionId) {
@@ -61,34 +99,26 @@ function App() {
     const unsubscribe = subscribeToSubmissionEvents(mode, submissionId, {
       onStatusChange: setConnectionState,
       onEvent: (event) => {
-        setEvents((previous) => [...previous, event]);
-        void refreshDataView(submissionId);
+        let nextEvents: SimulationEvent[] = [];
+        setEvents((previous) => {
+          nextEvents = [...previous, event];
+          return nextEvents;
+        });
+        eventsRef.current = nextEvents;
+        void refreshDataView(submissionId, nextEvents);
         void refreshApplications(mode);
       },
     });
 
     return unsubscribe;
-  }, [mode, submissionId]);
-
-  const refreshDataView = async (targetSubmissionId = submissionId) => {
-    if (!targetSubmissionId) {
-      return;
-    }
-
-    setIsLoadingData(true);
-    try {
-      const data = await fetchSubmissionData(mode, targetSubmissionId, events, submissionRawResult);
-      setDataView(data);
-    } finally {
-      setIsLoadingData(false);
-    }
-  };
+  }, [mode, refreshApplications, refreshDataView, submissionId]);
 
   const handleSubmit = async (payload: InsuranceSubmissionForm) => {
     let createdSubmissionId: string | null = null;
     setIsSubmitting(true);
     setError(null);
     setEvents([]);
+    eventsRef.current = [];
     setDataView(null);
     setConnectionState('idle');
 
@@ -97,16 +127,17 @@ function App() {
       createdSubmissionId = result.submissionId;
       setSubmissionId(result.submissionId);
       setSubmissionRawResult(result.raw);
-      setEvents([
-        {
-          id: `${result.submissionId}-submitted`,
-          timestamp: new Date().toISOString(),
-          type: 'submitted',
-          source: mode,
-          message: `Submission accepted with status: ${result.status}`,
-          raw: result.raw,
-        },
-      ]);
+      submissionRawResultRef.current = result.raw;
+      const initialEvent: SimulationEvent = {
+        id: `${result.submissionId}-submitted`,
+        timestamp: new Date().toISOString(),
+        type: 'submitted',
+        source: mode,
+        message: `Submission accepted with status: ${result.status}`,
+        raw: result.raw,
+      };
+      setEvents([initialEvent]);
+      eventsRef.current = [initialEvent];
       void refreshApplications(mode);
     } catch (submitError) {
       const errorMessage = submitError instanceof Error ? submitError.message : 'Submission failed';
@@ -121,9 +152,12 @@ function App() {
 
   const handleModeChange = (nextMode: ArchitectureMode) => {
     setMode(nextMode);
+    setCurrentPage(1);
     setSubmissionId(null);
     setSubmissionRawResult(null);
+    submissionRawResultRef.current = null;
     setEvents([]);
+    eventsRef.current = [];
     setDataView(null);
     setError(null);
     setConnectionState('idle');
@@ -132,7 +166,9 @@ function App() {
   const handleSelectSubmission = (nextSubmissionId: string) => {
     setSubmissionId(nextSubmissionId);
     setSubmissionRawResult(null);
+    submissionRawResultRef.current = null;
     setEvents([]);
+    eventsRef.current = [];
     setConnectionState('idle');
     void refreshDataView(nextSubmissionId);
   };

@@ -26,9 +26,7 @@ def run() -> None:
     print("persistence-service worker started")
 
     while True:
-        messages = streams.read_risk_results(
-            last_id=last_id, count=20, block_ms=POLL_BLOCK_MS
-        )
+        messages = streams.read_risk_results(last_id=last_id, count=20, block_ms=POLL_BLOCK_MS)
         if not messages:
             continue
 
@@ -52,10 +50,7 @@ def process_risk_result(*, stream_id: str, payload: dict[str, Any]) -> None:
         risk_level = "medium"
 
     reasons = payload.get("reasons") if isinstance(payload.get("reasons"), list) else []
-    model_name = (
-        str(payload.get("model_name", "shared-risk-rules")).strip()
-        or "shared-risk-rules"
-    )
+    model_name = str(payload.get("model_name", "shared-risk-rules")).strip() or "shared-risk-rules"
     model_version = str(payload.get("model_version", "v1")).strip() or "v1"
     evaluated_at = _parse_datetime(payload.get("evaluated_at"))
     status = _map_submission_status(risk_level)

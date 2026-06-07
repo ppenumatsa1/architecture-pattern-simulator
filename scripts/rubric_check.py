@@ -74,6 +74,18 @@ def main() -> None:
         "hasBankruptcy": False,
         "fraudFlag": False,
     }
+    reject_payload = {
+        "policyType": "life",
+        "notes": "rubric-reject",
+        "amount": 90000,
+        "age": 41,
+        "income": 52000,
+        "creditScore": 520,
+        "debtToIncome": 0.62,
+        "latePaymentsLast12Months": 4,
+        "hasBankruptcy": True,
+        "fraudFlag": False,
+    }
 
     cases: list[tuple[str, str, bool, str | None, str]] = []
 
@@ -106,6 +118,25 @@ def main() -> None:
             ok,
             mono_review_data.get("state"),
             "under_review",
+        )
+    )
+
+    _, mono_reject = req(
+        "POST",
+        "/api/monolith/submissions",
+        {"applicantId": "rubric-mono-reject", "payload": reject_payload},
+    )
+    mono_reject_id = str(pick(mono_reject, "submission_id", "submissionId"))
+    ok, mono_reject_data = poll(
+        f"/api/monolith/submissions/{mono_reject_id}", "state", "rejected"
+    )
+    cases.append(
+        (
+            "monolith-reject",
+            mono_reject_id,
+            ok,
+            mono_reject_data.get("state"),
+            "rejected",
         )
     )
 
@@ -143,6 +174,25 @@ def main() -> None:
         )
     )
 
+    _, micro_reject = req(
+        "POST",
+        "/api/microservices/submissions",
+        {"applicant_id": "rubric-micro-reject", "payload": reject_payload},
+    )
+    micro_reject_id = str(pick(micro_reject, "submission_id", "submissionId"))
+    ok, micro_reject_data = poll(
+        f"/api/microservices/submissions/{micro_reject_id}/status", "status", "rejected"
+    )
+    cases.append(
+        (
+            "micro-reject",
+            micro_reject_id,
+            ok,
+            micro_reject_data.get("status"),
+            "rejected",
+        )
+    )
+
     _, cqrs_auto = req(
         "POST",
         "/api/event-sourcing/commands/create-submission",
@@ -172,6 +222,25 @@ def main() -> None:
             ok,
             cqrs_review_data.get("status"),
             "under_review",
+        )
+    )
+
+    _, cqrs_reject = req(
+        "POST",
+        "/api/event-sourcing/commands/create-submission",
+        {"applicantId": "rubric-cqrs-reject", "payload": reject_payload},
+    )
+    cqrs_reject_id = str(pick(cqrs_reject, "submission_id", "submissionId"))
+    ok, cqrs_reject_data = poll(
+        f"/api/event-sourcing/projections/{cqrs_reject_id}", "status", "rejected"
+    )
+    cases.append(
+        (
+            "cqrs-reject",
+            cqrs_reject_id,
+            ok,
+            cqrs_reject_data.get("status"),
+            "rejected",
         )
     )
 
@@ -217,13 +286,27 @@ def main() -> None:
                 "cases": results,
                 "dashboard_hits": {
                     "monolith": sorted(
-                        list({mono_auto_id, mono_review_id}.intersection(mono_ids))
+                        list(
+                            {mono_auto_id, mono_review_id, mono_reject_id}.intersection(
+                                mono_ids
+                            )
+                        )
                     ),
                     "micro": sorted(
-                        list({micro_auto_id, micro_review_id}.intersection(micro_ids))
+                        list(
+                            {
+                                micro_auto_id,
+                                micro_review_id,
+                                micro_reject_id,
+                            }.intersection(micro_ids)
+                        )
                     ),
                     "cqrs": sorted(
-                        list({cqrs_auto_id, cqrs_review_id}.intersection(cqrs_ids))
+                        list(
+                            {cqrs_auto_id, cqrs_review_id, cqrs_reject_id}.intersection(
+                                cqrs_ids
+                            )
+                        )
                     ),
                 },
             },

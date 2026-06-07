@@ -36,9 +36,7 @@ def run() -> None:
 
         for stream_id, payload in messages:
             try:
-                process_submission_request(
-                    streams=streams, stream_id=stream_id, payload=payload
-                )
+                process_submission_request(streams=streams, stream_id=stream_id, payload=payload)
                 last_id = stream_id
             except Exception as exc:
                 print(f"risk-service failed stream_id={stream_id}: {exc}")

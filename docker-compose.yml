@@ -13,6 +13,15 @@ services:
       - ./infra/postgres/monolith.sql:/docker-entrypoint-initdb.d/monolith.sql:ro
       - ./infra/postgres/microservices.sql:/docker-entrypoint-initdb.d/microservices.sql:ro
       - ./infra/postgres/event_sourcing.sql:/docker-entrypoint-initdb.d/event_sourcing.sql:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-architecture_simulator}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   redis:
     image: redis:7
@@ -21,92 +30,147 @@ services:
       - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
-  monolith-api:
+  mono-api:
+    container_name: mono-api
     build:
       context: .
       dockerfile: ./monolith/api/Dockerfile
     ports:
       - "${MONOLITH_API_PORT:-8000}:8000"
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
-  submission-api:
+  micro-submission-api:
+    container_name: micro-submission-api
     build:
       context: .
       dockerfile: ./microservices/submission-api/Dockerfile
     ports:
       - "${SUBMISSION_API_PORT:-8001}:8000"
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
-  status-api:
+  micro-status-api:
+    container_name: micro-status-api
     build:
       context: .
       dockerfile: ./microservices/status-api/Dockerfile
     ports:
       - "${STATUS_API_PORT:-8002}:8000"
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
-  risk-service:
+  micro-risk-service:
+    container_name: micro-risk-service
     build:
       context: .
       dockerfile: ./microservices/risk-service/Dockerfile
     depends_on:
-      - redis
-      - postgres
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
-  persistence-service:
+  micro-persistence-service:
+    container_name: micro-persistence-service
     build:
       context: .
       dockerfile: ./microservices/persistence-service/Dockerfile
     depends_on:
-      - redis
-      - postgres
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
-  command-api:
+  micro-outbox-publisher:
+    container_name: micro-outbox-publisher
+    build:
+      context: .
+      dockerfile: ./microservices/outbox-publisher/Dockerfile
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  cqrs-command-api:
+    container_name: cqrs-command-api
     build:
       context: .
       dockerfile: ./event-sourcing-cqrs/command-api/Dockerfile
     ports:
       - "${COMMAND_API_PORT:-8003}:8000"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
 
-  query-api:
+  cqrs-query-api:
+    container_name: cqrs-query-api
     build:
       context: .
       dockerfile: ./event-sourcing-cqrs/query-api/Dockerfile
     ports:
       - "${QUERY_API_PORT:-8004}:8000"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
 
-  cqrs-risk-processor:
+  cqrs-risk-worker:
+    container_name: cqrs-risk-worker
     build:
       context: .
       dockerfile: ./event-sourcing-cqrs/processors/Dockerfile
     command: ["python", "risk_processor.py"]
     working_dir: /app/event-sourcing-cqrs/processors
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
 
-  cqrs-projection-processor:
+  cqrs-projection-worker:
+    container_name: cqrs-projection-worker
     build:
       context: .
       dockerfile: ./event-sourcing-cqrs/processors/Dockerfile
     command: ["python", "projection_processor.py"]
     working_dir: /app/event-sourcing-cqrs/processors
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  cqrs-outbox-worker:
+    container_name: cqrs-outbox-worker
+    build:
+      context: .
+      dockerfile: ./event-sourcing-cqrs/processors/Dockerfile
+    command: ["python", "outbox_publisher.py"]
+    working_dir: /app/event-sourcing-cqrs/processors
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
 
   ui:
@@ -118,7 +182,7 @@ services:
     ports:
       - "${UI_PORT:-5173}:${UI_PORT:-5173}"
     depends_on:
-      - monolith-api
+      - mono-api
 
   gateway:
     image: nginx:1.27-alpine
@@ -128,15 +192,17 @@ services:
       - ./gateway/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - ui
-      - monolith-api
-      - submission-api
-      - status-api
-      - risk-service
-      - persistence-service
-      - command-api
-      - query-api
-      - cqrs-risk-processor
-      - cqrs-projection-processor
+      - mono-api
+      - micro-submission-api
+      - micro-status-api
+      - micro-risk-service
+      - micro-persistence-service
+      - micro-outbox-publisher
+      - cqrs-command-api
+      - cqrs-query-api
+      - cqrs-risk-worker
+      - cqrs-projection-worker
+      - cqrs-outbox-worker
 
 volumes:
   postgres_data:

@@ -21,25 +21,28 @@ class EventRepository:
         session: Session,
         event: DomainEvent,
         *,
-        expected_version: int | None = None,
+        expected_aggregate_version: int | None = None,
     ) -> DomainEvent:
-        current_version = self.get_current_version(
+        current_version = self.get_current_aggregate_version(
             session, event.aggregate_type, event.aggregate_id
         )
-        if expected_version is not None and current_version != expected_version:
+        if (
+            expected_aggregate_version is not None
+            and current_version != expected_aggregate_version
+        ):
             raise EventStoreConcurrencyError(
                 f"Concurrency conflict for {event.aggregate_type}/{event.aggregate_id}: "
-                f"expected={expected_version}, current={current_version}"
+                f"expected={expected_aggregate_version}, current={current_version}"
             )
 
-        event.event_version = event.event_version or (current_version + 1)
-        if event.event_version <= current_version:
+        event.aggregate_version = event.aggregate_version or (current_version + 1)
+        if event.aggregate_version <= current_version:
             raise EventStoreConcurrencyError(
-                f"Invalid event version {event.event_version} for current version {current_version}"
+                f"Invalid aggregate version {event.aggregate_version} for current version {current_version}"
             )
 
         metadata = dict(event.metadata or {})
-        metadata.setdefault("schema_version", 1)
+        schema_version = int(event.schema_version or 1)
 
         insert_stmt = text("""
             INSERT INTO event_sourcing.event_store (
@@ -47,7 +50,8 @@ class EventRepository:
                 aggregate_id,
                 aggregate_type,
                 event_type,
-                event_version,
+                aggregate_version,
+                schema_version,
                 event_data,
                 metadata,
                 correlation_id,
@@ -57,7 +61,8 @@ class EventRepository:
                 :aggregate_id,
                 :aggregate_type,
                 :event_type,
-                :event_version,
+                :aggregate_version,
+                :schema_version,
                 CAST(:event_data AS JSONB),
                 CAST(:metadata AS JSONB),
                 :correlation_id,
@@ -74,7 +79,8 @@ class EventRepository:
                     "aggregate_id": event.aggregate_id,
                     "aggregate_type": event.aggregate_type,
                     "event_type": event.event_type,
-                    "event_version": event.event_version,
+                    "aggregate_version": event.aggregate_version,
+                    "schema_version": schema_version,
                     "event_data": json.dumps(event.event_data),
                     "metadata": json.dumps(metadata),
                     "correlation_id": event.correlation_id,
@@ -91,11 +97,11 @@ class EventRepository:
         event.created_at = result.created_at
         return event
 
-    def get_current_version(
+    def get_current_aggregate_version(
         self, session: Session, aggregate_type: str, aggregate_id: Any
     ) -> int:
         stmt = text("""
-            SELECT COALESCE(MAX(event_version), 0) AS version
+            SELECT COALESCE(MAX(aggregate_version), 0) AS version
             FROM event_sourcing.event_store
             WHERE aggregate_type = :aggregate_type
               AND aggregate_id = :aggregate_id
@@ -120,7 +126,8 @@ class EventRepository:
                 aggregate_id,
                 aggregate_type,
                 event_type,
-                event_version,
+                aggregate_version,
+                schema_version,
                 event_data,
                 metadata,
                 correlation_id,
@@ -130,7 +137,7 @@ class EventRepository:
             FROM event_sourcing.event_store
             WHERE aggregate_type = :aggregate_type
               AND aggregate_id = :aggregate_id
-              AND event_version >= :from_version
+                            AND aggregate_version >= :from_version
             ORDER BY sequence_number ASC
             """)
 
@@ -157,7 +164,8 @@ class EventRepository:
                 aggregate_id,
                 aggregate_type,
                 event_type,
-                event_version,
+                aggregate_version,
+                schema_version,
                 event_data,
                 metadata,
                 correlation_id,
@@ -178,8 +186,9 @@ class EventRepository:
     @staticmethod
     def _row_to_event(row: dict[str, Any]) -> DomainEvent:
         metadata = row.get("metadata") or {}
-        schema_version = (
-            int(metadata.get("schema_version", 1)) if isinstance(metadata, dict) else 1
+        schema_version = int(
+            row.get("schema_version")
+            or (metadata.get("schema_version", 1) if isinstance(metadata, dict) else 1)
         )
         upcasted = upcast(
             {
@@ -191,6 +200,7 @@ class EventRepository:
         )
         row["event_data"] = upcasted.get("event_data") or {}
         row["metadata"] = upcasted.get("metadata") or metadata
+        row["schema_version"] = int(upcasted.get("schema_version") or schema_version)
         return DomainEvent.from_record(row)
 
 

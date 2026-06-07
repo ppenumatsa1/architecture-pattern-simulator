@@ -29,6 +29,7 @@ The UI switches modes and hits mode-specific APIs through the Nginx gateway.
 ## Data & transport roles
 
 - **Postgres**: persistent state for all modes (schemas: `monolith`, `microservices`, `event_sourcing`).
+- **Outbox tables**: reliable handoff from DB transactions to async transport (microservices + CQRS).
 - **Redis Streams**: async event transport for microservices (`submission_requests`, `risk_results`) and event-sourcing processors (`domain_events`).
 - **SSE**: UI-facing live timeline channel from each mode’s read side.
 
@@ -38,8 +39,23 @@ The UI switches modes and hits mode-specific APIs through the Nginx gateway.
 - **Risk Service**: async risk computation + risk timeline events.
 - **Persistence Service**: applies async risk outcomes to status/risk read tables.
 - **Status API**: read + SSE interface only.
+- **Outbox Publisher**: publishes pending outbox rows to Redis Streams and marks rows as sent.
+
+## CQRS service ownership
+
+- **CQRS Command API**: appends immutable events and writes outbox rows in the same transaction.
+- **CQRS Risk Worker**: consumes stream events and appends derived risk/decision domain events.
+- **CQRS Projection Worker**: projects event store sequence to read models.
+- **CQRS Outbox Worker**: reliably publishes outbox rows to Redis `domain_events`.
+- **CQRS Query API**: serves projections and SSE.
 
 This ownership split is deliberate to demonstrate decoupled write workers versus read-serving API concerns.
+
+## Healthcheck policy
+
+- Postgres and Redis healthchecks are intentionally simple readiness gates.
+- Service startup uses `depends_on: condition: service_healthy` to avoid boot races.
+- This adds minimal complexity while reducing transient startup failures and noisy retries.
 
 ## SSE behavior
 

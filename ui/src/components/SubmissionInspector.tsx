@@ -111,6 +111,7 @@ function SubmissionInspector({
 }: SubmissionInspectorProps) {
   const [tab, setTab] = useState<InspectorTab>('activity');
   const [activityView, setActivityView] = useState<'pretty' | 'raw'>('pretty');
+  const [showActivityJson, setShowActivityJson] = useState(false);
   const [dataViewMode, setDataViewMode] = useState<'pretty' | 'raw'>('pretty');
   const modeConfig = useMemo(() => getModeConfig(mode), [mode]);
 
@@ -179,6 +180,15 @@ function SubmissionInspector({
             >
               Raw JSON
             </button>
+            {activityView === 'pretty' ? (
+              <button
+                type="button"
+                className={showActivityJson ? 'active' : ''}
+                onClick={() => setShowActivityJson((prev) => !prev)}
+              >
+                {showActivityJson ? 'Hide Payloads' : 'Show Payloads'}
+              </button>
+            ) : null}
           </div>
 
           {activityView === 'pretty' ? (
@@ -196,16 +206,18 @@ function SubmissionInspector({
                         <div>Source: {source}</div>
                         <div>Time: {new Date(event.timestamp).toLocaleTimeString()}</div>
                       </div>
-                      <details className="event-json-toggle">
-                        <summary>View JSON</summary>
-                        <pre className="json-box inspector-json">
-                          {JSON.stringify(
-                            activityLog.find((entry) => entry.event.id === event.id),
-                            null,
-                            2,
-                          )}
-                        </pre>
-                      </details>
+                      {showActivityJson ? (
+                        <details className="event-json-toggle">
+                          <summary>View JSON</summary>
+                          <pre className="json-box inspector-json">
+                            {JSON.stringify(
+                              activityLog.find((entry) => entry.event.id === event.id),
+                              null,
+                              2,
+                            )}
+                          </pre>
+                        </details>
+                      ) : null}
                     </article>
                   );
                 })

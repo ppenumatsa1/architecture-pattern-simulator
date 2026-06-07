@@ -16,18 +16,21 @@
 ## Contributor flow (quick validation)
 
 1. Start stack (`docker compose up`).
-2. (Recommended for async modes) start workers/processors:
+2. Compose starts workers/processors/outbox publishers automatically.
+3. (Optional, debug-only) run workers manually outside Compose:
    - `./.venv/bin/python microservices/risk-service/worker.py`
    - `./.venv/bin/python microservices/persistence-service/worker.py`
+   - `./.venv/bin/python microservices/outbox-publisher/worker.py`
    - `./.venv/bin/python event-sourcing-cqrs/processors/risk_processor.py`
    - `./.venv/bin/python event-sourcing-cqrs/processors/projection_processor.py`
-3. Submit one request per mode from UI.
-4. Confirm expected timeline sequence:
+   - `./.venv/bin/python event-sourcing-cqrs/processors/outbox_publisher.py`
+4. Submit one request per mode from UI.
+5. Confirm expected timeline sequence:
    - submission received,
    - risk scored,
    - manual review requested or decision made.
-5. Verify SSE remains alive during idle periods (keep-alive comments or done event behavior per mode).
-6. Verify data endpoint output aligns with that mode’s source-of-truth model.
+6. Verify SSE remains alive during idle periods (keep-alive comments or done event behavior per mode).
+7. Verify data endpoint output aligns with that mode’s source-of-truth model.
 
 ## Related docs
 

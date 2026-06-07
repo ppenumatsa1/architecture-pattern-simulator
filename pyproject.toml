@@ -1,3 +1,30 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "architecture-pattern-simulator"
+version = "0.1.0"
+description = "Insurance architecture pattern simulator"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi",
+  "uvicorn",
+  "pydantic",
+  "sqlalchemy",
+  "psycopg[binary]",
+  "redis",
+]
+
+[project.optional-dependencies]
+dev = [
+  "ruff",
+  "pytest",
+]
+
+[tool.setuptools]
+packages = []
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"

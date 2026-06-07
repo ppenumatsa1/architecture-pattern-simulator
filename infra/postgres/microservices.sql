@@ -49,3 +49,22 @@ CREATE INDEX IF NOT EXISTS idx_microservices_timeline_submission_occurred
 
 CREATE INDEX IF NOT EXISTS idx_microservices_timeline_event_type_occurred
   ON microservices.timeline_events (event_type, occurred_at DESC);
+
+CREATE TABLE IF NOT EXISTS microservices.outbox_messages (
+  outbox_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  stream_name TEXT NOT NULL CHECK (stream_name IN ('submission_requests', 'risk_results')),
+  message_key TEXT NOT NULL CHECK (btrim(message_key) <> ''),
+  payload JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  available_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  published_at TIMESTAMPTZ,
+  attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+  max_attempts INTEGER NOT NULL DEFAULT 20 CHECK (max_attempts > 0),
+  last_attempt_at TIMESTAMPTZ,
+  last_error TEXT,
+  CONSTRAINT uq_microservices_outbox_key UNIQUE (stream_name, message_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_microservices_outbox_pending
+  ON microservices.outbox_messages (published_at, available_at, outbox_id)
+  WHERE published_at IS NULL;

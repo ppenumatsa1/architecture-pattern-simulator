@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 import sys
@@ -16,9 +17,12 @@ for path in (BASE_DIR, SHARED_DIR):
         sys.path.append(path_str)
 
 from python.db import session_scope  # noqa: E402
-from python.redis_client import RedisStreams  # noqa: E402
 from event_store.events import new_domain_event  # noqa: E402
-from event_store.repository import EVENT_REPOSITORY, EventStoreConcurrencyError  # noqa: E402
+from event_store.repository import (
+    EVENT_REPOSITORY,
+    EventStoreConcurrencyError,
+)  # noqa: E402
+from sqlalchemy import text  # noqa: E402
 
 router = APIRouter()
 
@@ -44,7 +48,6 @@ def create_submission(command: CreateSubmissionCommand) -> dict:
     submission_id = uuid4()
     now = datetime.now(tz=timezone.utc)
     metadata = {
-        "schema_version": 1,
         "producer": "command-api",
         "command": "create-submission",
     }
@@ -53,6 +56,7 @@ def create_submission(command: CreateSubmissionCommand) -> dict:
         aggregate_id=submission_id,
         aggregate_type="submission",
         event_type="submission.created",
+        schema_version=1,
         event_data={
             "submission_id": str(submission_id),
             "applicant_id": command.applicant_id,
@@ -63,13 +67,34 @@ def create_submission(command: CreateSubmissionCommand) -> dict:
         correlation_id=command.correlation_id,
     )
 
-    streams = RedisStreams()
     try:
         with session_scope() as session:
-            stored_event = EVENT_REPOSITORY.append(session, event, expected_version=0)
-            streams.publish_domain_event(stored_event.to_stream_payload())
+            stored_event = EVENT_REPOSITORY.append(
+                session, event, expected_aggregate_version=0
+            )
+
+            session.execute(
+                text("""
+                    INSERT INTO event_sourcing.outbox_messages (
+                        stream_name,
+                        message_key,
+                        payload
+                    ) VALUES (
+                        'domain_events',
+                        :message_key,
+                        CAST(:payload AS JSONB)
+                    )
+                    ON CONFLICT DO NOTHING
+                    """),
+                {
+                    "message_key": str(stored_event.event_id),
+                    "payload": json.dumps(stored_event.to_stream_payload()),
+                },
+            )
     except EventStoreConcurrencyError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+        ) from exc
     except Exception as exc:  # pragma: no cover - defensive transport error handling
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

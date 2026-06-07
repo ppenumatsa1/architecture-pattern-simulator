@@ -13,7 +13,8 @@ class DomainEvent:
     aggregate_type: str
     event_type: str
     event_data: dict[str, Any]
-    event_version: int | None = None
+    aggregate_version: int | None = None
+    schema_version: int = 1
     metadata: dict[str, Any] = field(default_factory=dict)
     correlation_id: UUID | None = None
     causation_id: UUID | None = None
@@ -26,7 +27,8 @@ class DomainEvent:
             "aggregate_id": self.aggregate_id,
             "aggregate_type": self.aggregate_type,
             "event_type": self.event_type,
-            "event_version": self.event_version,
+            "aggregate_version": self.aggregate_version,
+            "schema_version": self.schema_version,
             "event_data": self.event_data,
             "metadata": self.metadata,
             "correlation_id": self.correlation_id,
@@ -39,7 +41,9 @@ class DomainEvent:
         payload = self.to_record()
         payload["event_id"] = str(self.event_id)
         payload["aggregate_id"] = str(self.aggregate_id)
-        payload["correlation_id"] = str(self.correlation_id) if self.correlation_id else None
+        payload["correlation_id"] = (
+            str(self.correlation_id) if self.correlation_id else None
+        )
         payload["causation_id"] = str(self.causation_id) if self.causation_id else None
         payload["created_at"] = (
             self.created_at.astimezone(timezone.utc).isoformat()
@@ -55,7 +59,10 @@ class DomainEvent:
             aggregate_id=_to_uuid(record.get("aggregate_id")),
             aggregate_type=str(record.get("aggregate_type")),
             event_type=str(record.get("event_type")),
-            event_version=record.get("event_version"),
+            aggregate_version=record.get(
+                "aggregate_version", record.get("event_version")
+            ),
+            schema_version=int(record.get("schema_version") or 1),
             event_data=_to_dict(record.get("event_data")),
             metadata=_to_dict(record.get("metadata")),
             correlation_id=_to_uuid_or_none(record.get("correlation_id")),
@@ -71,6 +78,7 @@ def new_domain_event(
     aggregate_type: str,
     event_type: str,
     event_data: dict[str, Any],
+    schema_version: int = 1,
     metadata: dict[str, Any] | None = None,
     correlation_id: UUID | None = None,
     causation_id: UUID | None = None,
@@ -81,6 +89,7 @@ def new_domain_event(
         aggregate_type=aggregate_type,
         event_type=event_type,
         event_data=event_data,
+        schema_version=schema_version,
         metadata=metadata or {},
         correlation_id=correlation_id,
         causation_id=causation_id,

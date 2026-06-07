@@ -57,7 +57,7 @@ Optional local Python bootstrap (if `./.venv` is missing):
 ```bash
 python3.12 -m venv .venv
 ./.venv/bin/pip install -U pip
-./.venv/bin/pip install ruff pytest fastapi uvicorn pydantic sqlalchemy "psycopg[binary]" redis
+./.venv/bin/pip install -e ".[dev]"
 ```
 
 ## Quick start (Docker Compose)
@@ -99,14 +99,7 @@ docker compose up --build
 
 - see [docs/manual-testing.md](docs/manual-testing.md)
 
-4. For **Microservices** and **Event Sourcing + CQRS**, start workers/processors if you want full async progression:
-
-```bash
-./.venv/bin/python microservices/risk-service/worker.py
-./.venv/bin/python microservices/persistence-service/worker.py
-./.venv/bin/python event-sourcing-cqrs/processors/risk_processor.py
-./.venv/bin/python event-sourcing-cqrs/processors/projection_processor.py
-```
+4. `docker compose up --build` already starts all workers/processors needed for end-to-end flow.
 
 5. Re-run submissions in each mode and compare timelines + final state in the UI.
 
@@ -152,6 +145,26 @@ This split is intentional: write-side async workers handle transitions, while St
 
 UI event normalization accepts `type`, `eventType`, or `status` fields from stream payloads.
 
+## Operational notes
+
+- CQRS event store uses `aggregate_version` for per-aggregate ordering and `schema_version` for payload evolution.
+- Command and microservices write paths use a transactional outbox; dedicated outbox publishers deliver to Redis streams.
+- Healthchecks (`pg_isready`, `redis-cli ping`) and `depends_on: condition: service_healthy` reduce startup race failures.
+
+For deeper implementation details and trade-offs, see `docs/design/architecture.md`.
+
+## Rerunnable end-to-end checks
+
+Run from repo root:
+
+```bash
+python3 scripts/rubric_check.py
+python3 scripts/playwright_check.py
+```
+
+- `scripts/rubric_check.py` validates state outcomes across all three modes.
+- `scripts/playwright_check.py` installs Chromium if needed and runs UI E2E (`ui/e2e/simulator.spec.ts`).
+
 ## Quality commands
 
 From repository root:
@@ -172,7 +185,7 @@ These run:
 - **`make lint` / `make test` fails with missing `./.venv/bin/python`:**
   create `.venv` and install dependencies (see prerequisites).
 - **UI mode appears accepted but state/events do not progress in async modes:**
-  run microservice workers + CQRS processors locally (commands above).
+  verify `risk-service`, `persistence-service`, `cqrs-risk-processor`, and `cqrs-projection-processor` are healthy in Docker logs; run workers locally only when debugging outside Docker.
 - **SSE appears idle:** keep-alive comments are expected in monolith/microservices when no new rows exist.
 - **Event-sourcing stream closes:** expected after idle timeout (`event: done`), reconnect to resume.
 - **Route mismatch issues:** always use gateway paths (`/api/...`) instead of direct container hostnames.

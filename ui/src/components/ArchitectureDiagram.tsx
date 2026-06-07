@@ -36,31 +36,31 @@ function inferActiveFlowIndex(mode: ArchitectureMode, events: SimulationEvent[])
       latestType.includes('rejected') ||
       latestType.includes('manual_review_requested')
     ) {
-      return 4;
+      return 7;
     }
     if (latestType.includes('review') || latestType.includes('risk')) {
-      return 2;
+      return 5;
     }
     if (latestType.includes('submission')) {
-      return 1;
+      return 3;
     }
     return 0;
   }
 
   if (latestType.includes('approved') || latestType.includes('rejected')) {
-    return 4;
+    return 7;
   }
   if (latestType.includes('review')) {
-    return 4;
+    return 7;
   }
   if (latestType.includes('projection')) {
-    return 3;
+    return 6;
   }
   if (latestType.includes('risk')) {
-    return 2;
+    return 5;
   }
   if (latestType.includes('submission') || latestType.includes('created')) {
-    return 1;
+    return 3;
   }
   return 0;
 }

@@ -113,7 +113,7 @@ def _apply_submission_projection(session, event) -> None:
                 "aggregate_id": event.aggregate_id,
                 "applicant_id": event_data.get("applicant_id", "unknown"),
                 "payload": json.dumps(event_data.get("payload", {})),
-                "event_version": event.event_version,
+                "event_version": event.aggregate_version,
                 "submitted_at": event_data.get("submitted_at"),
             },
         )
@@ -139,7 +139,7 @@ def _apply_submission_projection(session, event) -> None:
             {
                 "aggregate_id": event.aggregate_id,
                 "submission_status": status_updates[event_type],
-                "event_version": event.event_version,
+                "event_version": event.aggregate_version,
             },
         )
 
@@ -149,6 +149,14 @@ def _apply_risk_projection(session, event) -> None:
         return
 
     event_data = event.event_data
+    raw_score = event_data.get("score")
+    bounded_score = raw_score
+    if raw_score is not None:
+        try:
+            bounded_score = max(0.0, min(100.0, float(raw_score)))
+        except (TypeError, ValueError):
+            bounded_score = None
+
     stmt = text("""
         INSERT INTO event_sourcing.risk_summary_read_model (
             aggregate_id,
@@ -181,11 +189,11 @@ def _apply_risk_projection(session, event) -> None:
         stmt,
         {
             "aggregate_id": event.aggregate_id,
-            "risk_score": event_data.get("score"),
+            "risk_score": bounded_score,
             "risk_level": event_data.get("risk_level"),
             "factors": json.dumps(event_data.get("factors", [])),
             "evaluated_at": event.created_at.isoformat() if event.created_at else None,
-            "event_version": event.event_version,
+            "event_version": event.aggregate_version,
         },
     )
 
