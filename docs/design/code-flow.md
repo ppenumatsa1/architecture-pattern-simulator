@@ -27,7 +27,7 @@
 1. `POST /api/event-sourcing/commands/create-submission` (cqrs-command-api).
 2. cqrs-command-api appends `submission.created` to `event_store` and writes outbox rows in the same transaction.
 3. cqrs-outbox-worker publishes pending outbox rows to Redis `domain_events`.
-4. cqrs-risk-worker consumes `domain_events` and appends derived domain events (`risk.scoring.started`, `risk.scored`, decision event) + outbox rows.
+4. cqrs-risk-worker reads new events from `event_store` using processor offsets and appends derived domain events (`risk.scoring.started`, `risk.scored`, decision event) + outbox rows.
 5. cqrs-outbox-worker publishes derived outbox rows to `domain_events`.
 6. cqrs-projection-worker reads event store sequence and updates:
    - `submission_read_model`

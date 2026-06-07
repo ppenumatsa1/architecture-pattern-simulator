@@ -73,7 +73,7 @@ const modeConfigs: Record<ArchitectureModeConfig['mode'], ArchitectureModeConfig
         'UI -> CQRS Command API',
         'Command API -> Event Store + Outbox row',
         'CQRS Outbox Worker -> Redis Streams (domain_events)',
-        'Redis Streams -> CQRS Risk Worker -> Event Store + Outbox',
+        'Event Store sequence -> CQRS Risk Worker -> Event Store + Outbox',
         'CQRS Projection Worker -> Query read models',
         'CQRS Query API -> UI (events/reads)',
       ],

@@ -137,7 +137,7 @@ class EventRepository:
             FROM event_sourcing.event_store
             WHERE aggregate_type = :aggregate_type
               AND aggregate_id = :aggregate_id
-                            AND aggregate_version >= :from_version
+              AND aggregate_version >= :from_version
             ORDER BY sequence_number ASC
             """)
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 import sys
 import time
 from uuid import UUID
@@ -16,7 +17,6 @@ for path in (BASE_DIR, SHARED_DIR):
 
 from python.db import session_scope  # noqa: E402
 from python.models import Submission  # noqa: E402
-from python.redis_client import RedisStreams  # noqa: E402
 from python.risk_rules import evaluate_risk  # noqa: E402
 from event_store.events import DomainEvent, new_domain_event  # noqa: E402
 from event_store.repository import EVENT_REPOSITORY  # noqa: E402
@@ -95,30 +95,8 @@ def _has_started_for_causation(session, causation_id: UUID) -> bool:
     )
 
 
-def _to_domain_event(payload: dict) -> DomainEvent:
-    return DomainEvent.from_record(
-        {
-            "event_id": payload.get("event_id"),
-            "aggregate_id": payload.get("aggregate_id"),
-            "aggregate_type": payload.get("aggregate_type"),
-            "event_type": payload.get("event_type"),
-            "aggregate_version": payload.get(
-                "aggregate_version", payload.get("event_version")
-            ),
-            "schema_version": payload.get("schema_version", 1),
-            "event_data": payload.get("event_data", {}),
-            "metadata": payload.get("metadata", {}),
-            "correlation_id": payload.get("correlation_id"),
-            "causation_id": payload.get("causation_id"),
-            "created_at": payload.get("created_at"),
-            "sequence_number": payload.get("sequence_number"),
-        }
-    )
-
-
 def _emit_event(
     session,
-    streams: RedisStreams,
     source: DomainEvent,
     event_type: str,
     event_data: dict,
@@ -136,27 +114,44 @@ def _emit_event(
         causation_id=source.event_id,
     )
     stored = EVENT_REPOSITORY.append(session, event)
-    streams.publish_domain_event(stored.to_stream_payload())
+    session.execute(
+        text("""
+            INSERT INTO event_sourcing.outbox_messages (
+                stream_name,
+                message_key,
+                payload
+            ) VALUES (
+                'domain_events',
+                :message_key,
+                CAST(:payload AS JSONB)
+            )
+            ON CONFLICT DO NOTHING
+            """),
+        {
+            "message_key": str(stored.event_id),
+            "payload": json.dumps(stored.to_stream_payload()),
+        },
+    )
     return stored
 
 
 def run() -> None:
     print("risk processor started")
-    streams = RedisStreams()
 
     while True:
-        messages = streams.read_domain_events(
-            last_id="0-0", count=BATCH_SIZE, block_ms=1000
-        )
-        if not messages:
-            time.sleep(POLL_INTERVAL_SECONDS)
-            continue
-
         with session_scope() as session:
             offset = _load_offset(session)
+            source_events = EVENT_REPOSITORY.read_events_since(
+                session,
+                after_sequence_number=offset,
+                limit=BATCH_SIZE,
+            )
 
-            for _, payload in messages:
-                source = _to_domain_event(payload)
+            if not source_events:
+                time.sleep(POLL_INTERVAL_SECONDS)
+                continue
+
+            for source in source_events:
                 source_sequence = int(source.sequence_number or 0)
 
                 if source_sequence <= offset:
@@ -180,7 +175,6 @@ def run() -> None:
 
                 _emit_event(
                     session,
-                    streams,
                     source,
                     "risk.scoring.started",
                     {
@@ -191,7 +185,6 @@ def run() -> None:
                 risk_result = evaluate_risk(submission)
                 _emit_event(
                     session,
-                    streams,
                     source,
                     "risk.scored",
                     {
@@ -212,7 +205,6 @@ def run() -> None:
 
                 _emit_event(
                     session,
-                    streams,
                     source,
                     decision_event_type,
                     {

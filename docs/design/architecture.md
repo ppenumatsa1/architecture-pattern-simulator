@@ -30,7 +30,7 @@ The UI switches modes and hits mode-specific APIs through the Nginx gateway.
 
 - **Postgres**: persistent state for all modes (schemas: `monolith`, `microservices`, `event_sourcing`).
 - **Outbox tables**: reliable handoff from DB transactions to async transport (microservices + CQRS).
-- **Redis Streams**: async event transport for microservices (`submission_requests`, `risk_results`) and event-sourcing processors (`domain_events`).
+- **Redis Streams**: async event transport for microservices (`submission_requests`, `risk_results`) and CQRS outbox publication (`domain_events`).
 - **SSE**: UI-facing live timeline channel from each mode’s read side.
 
 ## Microservices service ownership
@@ -44,7 +44,7 @@ The UI switches modes and hits mode-specific APIs through the Nginx gateway.
 ## CQRS service ownership
 
 - **CQRS Command API**: appends immutable events and writes outbox rows in the same transaction.
-- **CQRS Risk Worker**: consumes stream events and appends derived risk/decision domain events.
+- **CQRS Risk Worker**: reads event-store sequence using processor offsets and appends derived risk/decision domain events + outbox rows.
 - **CQRS Projection Worker**: projects event store sequence to read models.
 - **CQRS Outbox Worker**: reliably publishes outbox rows to Redis `domain_events`.
 - **CQRS Query API**: serves projections and SSE.

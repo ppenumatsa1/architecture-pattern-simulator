@@ -32,11 +32,12 @@ cqrs/
 ## Compose runtime mapping
 
 - Included in `docker-compose.yml`: `postgres`, `redis`, mode APIs, `ui`, and `gateway`.
+- Compose also starts worker/processor services for full async behavior during normal runs.
 - Worker/processor code exists in:
   - `microservices/risk-service`
   - `microservices/persistence-service`
   - `event-sourcing-cqrs/processors`
-  and is started separately when needed for full async behavior demos.
+    and can be run manually only when debugging outside Compose.
 
 ## Related docs
 

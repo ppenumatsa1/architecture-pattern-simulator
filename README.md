@@ -148,7 +148,7 @@ UI event normalization accepts `type`, `eventType`, or `status` fields from stre
 ## Operational notes
 
 - CQRS event store uses `aggregate_version` for per-aggregate ordering and `schema_version` for payload evolution.
-- Command and microservices write paths use a transactional outbox; dedicated outbox publishers deliver to Redis streams.
+- CQRS and microservices event producers use a transactional outbox; dedicated outbox publishers deliver to Redis streams.
 - Healthchecks (`pg_isready`, `redis-cli ping`) and `depends_on: condition: service_healthy` reduce startup race failures.
 
 For deeper implementation details and trade-offs, see `docs/design/architecture.md`.
@@ -190,6 +190,20 @@ These run:
 - **Event-sourcing stream closes:** expected after idle timeout (`event: done`), reconnect to resume.
 - **Route mismatch issues:** always use gateway paths (`/api/...`) instead of direct container hostnames.
 - **When debugging route behavior:** verify service behavior directly on ports `8000`-`8004` and then retest through gateway `:8080`.
+
+## License
+
+This project is licensed under the MIT License - see [LICENSE](LICENSE) for details.
+
+## Disclaimer
+
+This repository is provided for educational and demonstration purposes only. It
+is not intended for production use as-is. You are responsible for reviewing,
+testing, and securing any code, configurations, credentials, or deployment
+artifacts before using them in real systems. Do not deploy this repository without your
+own security review, compliance checks, and operational hardening (logging,
+alerting, backups, access controls, and cost safeguards). By using this repository,
+you acknowledge that you assume all risks associated with its use.
 
 ## Additional docs and agent guidance
 
