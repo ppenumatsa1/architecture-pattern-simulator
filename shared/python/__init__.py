@@ -19,12 +19,13 @@ try:
     from .db import get_engine as get_engine
     from .db import session_scope as session_scope
 
-    __all__.extend(["get_database_settings", "get_db_session", "get_engine", "session_scope"])
+    __all__.extend(
+        ["get_database_settings", "get_db_session", "get_engine", "session_scope"]
+    )
 except ModuleNotFoundError:
     pass
 
 try:
-    from .redis_client import DOMAIN_EVENTS_STREAM as DOMAIN_EVENTS_STREAM
     from .redis_client import RISK_RESULTS_STREAM as RISK_RESULTS_STREAM
     from .redis_client import SUBMISSION_REQUESTS_STREAM as SUBMISSION_REQUESTS_STREAM
     from .redis_client import RedisStreams as RedisStreams
@@ -33,7 +34,6 @@ try:
 
     __all__.extend(
         [
-            "DOMAIN_EVENTS_STREAM",
             "RISK_RESULTS_STREAM",
             "SUBMISSION_REQUESTS_STREAM",
             "RedisStreams",

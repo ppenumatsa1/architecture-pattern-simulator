@@ -23,7 +23,6 @@
    - `./.venv/bin/python microservices/outbox-publisher/worker.py`
    - `./.venv/bin/python event-sourcing-cqrs/processors/risk_processor.py`
    - `./.venv/bin/python event-sourcing-cqrs/processors/projection_processor.py`
-   - `./.venv/bin/python event-sourcing-cqrs/processors/outbox_publisher.py`
 4. Submit one request per mode from UI.
 5. Confirm expected timeline sequence:
    - submission received,

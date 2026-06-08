@@ -286,7 +286,7 @@ function SubmissionInspector({
           <h3>{modeConfig.label} Flow</h3>
           <div className="architecture-stack">
             {modeConfig.diagram.nodes.map((node, index) => (
-              <div key={node} className="arch-node-wrap">
+              <div key={`${node}-${index}`} className="arch-node-wrap">
                 <div className="arch-node">{node}</div>
                 {index < modeConfig.diagram.nodes.length - 1 ? (
                   <div className="arch-arrow">↓</div>

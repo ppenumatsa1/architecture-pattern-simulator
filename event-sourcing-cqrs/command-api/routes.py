@@ -1,6 +1,4 @@
 from __future__ import annotations
-
-import json
 from datetime import datetime, timezone
 from pathlib import Path
 import sys
@@ -22,7 +20,6 @@ from event_store.repository import (
     EVENT_REPOSITORY,
     EventStoreConcurrencyError,
 )  # noqa: E402
-from sqlalchemy import text  # noqa: E402
 
 router = APIRouter()
 
@@ -69,28 +66,7 @@ def create_submission(command: CreateSubmissionCommand) -> dict:
 
     try:
         with session_scope() as session:
-            stored_event = EVENT_REPOSITORY.append(
-                session, event, expected_aggregate_version=0
-            )
-
-            session.execute(
-                text("""
-                    INSERT INTO event_sourcing.outbox_messages (
-                        stream_name,
-                        message_key,
-                        payload
-                    ) VALUES (
-                        'domain_events',
-                        :message_key,
-                        CAST(:payload AS JSONB)
-                    )
-                    ON CONFLICT DO NOTHING
-                    """),
-                {
-                    "message_key": str(stored_event.event_id),
-                    "payload": json.dumps(stored_event.to_stream_payload()),
-                },
-            )
+            EVENT_REPOSITORY.append(session, event, expected_aggregate_version=0)
     except EventStoreConcurrencyError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail=str(exc)

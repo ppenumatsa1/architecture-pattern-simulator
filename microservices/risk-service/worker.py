@@ -36,16 +36,14 @@ def run() -> None:
 
         for stream_id, payload in messages:
             try:
-                process_submission_request(streams=streams, stream_id=stream_id, payload=payload)
+                process_submission_request(stream_id=stream_id, payload=payload)
                 last_id = stream_id
             except Exception as exc:
                 print(f"risk-service failed stream_id={stream_id}: {exc}")
                 time.sleep(1)
 
 
-def process_submission_request(
-    *, streams: RedisStreams, stream_id: str, payload: dict[str, Any]
-) -> None:
+def process_submission_request(*, stream_id: str, payload: dict[str, Any]) -> None:
     submission_id = str(payload.get("submission_id", "")).strip()
     if not submission_id:
         raise ValueError("submission_id is required")
@@ -129,8 +127,7 @@ def process_submission_request(
                 },
             )
 
-    streams.publish_risk_result(
-        {
+        risk_result_payload = {
             "submission_id": submission_id,
             "score": normalized_score,
             "risk_level": mapped_level,
@@ -140,7 +137,24 @@ def process_submission_request(
             "source_message_id": stream_id,
             "evaluated_at": evaluated_at.isoformat(),
         }
-    )
+        session.execute(
+            text("""
+                INSERT INTO microservices.outbox_messages (
+                    stream_name,
+                    message_key,
+                    payload
+                ) VALUES (
+                    'risk_results',
+                    :message_key,
+                    CAST(:payload AS JSONB)
+                )
+                ON CONFLICT DO NOTHING
+                """),
+            {
+                "message_key": f"risk-result:{submission_id}:{stream_id}",
+                "payload": json.dumps(risk_result_payload),
+            },
+        )
 
 
 def _map_risk_level(score: int) -> str:

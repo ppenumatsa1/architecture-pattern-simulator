@@ -159,20 +159,6 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  cqrs-outbox-worker:
-    container_name: cqrs-outbox-worker
-    build:
-      context: .
-      dockerfile: ./event-sourcing-cqrs/processors/Dockerfile
-    command: ["python", "outbox_publisher.py"]
-    working_dir: /app/event-sourcing-cqrs/processors
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
-
   ui:
     image: node:20
     working_dir: /app
@@ -202,7 +188,6 @@ services:
       - cqrs-query-api
       - cqrs-risk-worker
       - cqrs-projection-worker
-      - cqrs-outbox-worker
 
 volumes:
   postgres_data:

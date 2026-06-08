@@ -129,10 +129,11 @@ See schema SQL in `infra/postgres/*.sql`.
 
 ## Microservices role split (why multiple services exist)
 
-- **Submission API**: accepts requests, writes initial submission row, emits `submission_received`, and publishes to Redis `submission_requests`.
-- **Risk Service**: consumes `submission_requests`, runs risk rules, emits risk timeline events, and publishes normalized outcomes to Redis `risk_results`.
+- **Submission API**: accepts requests, writes initial submission row, emits `submission_received`, and writes an outbox row for `submission_requests` in the same DB transaction.
+- **Risk Service**: consumes `submission_requests`, runs risk rules, emits risk timeline events, and writes outbox rows for `risk_results` in the same DB transaction.
 - **Persistence Service**: consumes `risk_results`, updates submission status/version, upserts risk summary, and writes final timeline decisions.
 - **Status API**: read-only facade for dashboard/status/SSE against `microservices.*` tables.
+- **Outbox Publisher**: reads microservices outbox rows and publishes to Redis streams.
 
 This split is intentional: write-side async workers handle transitions, while Status API stays focused on read + stream concerns.
 
@@ -148,7 +149,8 @@ UI event normalization accepts `type`, `eventType`, or `status` fields from stre
 ## Operational notes
 
 - CQRS event store uses `aggregate_version` for per-aggregate ordering and `schema_version` for payload evolution.
-- CQRS and microservices event producers use a transactional outbox; dedicated outbox publishers deliver to Redis streams.
+- Microservices event producers use a transactional outbox; dedicated outbox publishers deliver to Redis streams.
+- CQRS command/risk/projection processors coordinate through event-store sequence + processor offsets without Redis transport.
 - Healthchecks (`pg_isready`, `redis-cli ping`) and `depends_on: condition: service_healthy` reduce startup race failures.
 
 For deeper implementation details and trade-offs, see `docs/design/architecture.md`.

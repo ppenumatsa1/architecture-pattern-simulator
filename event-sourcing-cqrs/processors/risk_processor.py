@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-import json
 import sys
 import time
 from uuid import UUID
@@ -113,26 +112,7 @@ def _emit_event(
         correlation_id=source.correlation_id or source.event_id,
         causation_id=source.event_id,
     )
-    stored = EVENT_REPOSITORY.append(session, event)
-    session.execute(
-        text("""
-            INSERT INTO event_sourcing.outbox_messages (
-                stream_name,
-                message_key,
-                payload
-            ) VALUES (
-                'domain_events',
-                :message_key,
-                CAST(:payload AS JSONB)
-            )
-            ON CONFLICT DO NOTHING
-            """),
-        {
-            "message_key": str(stored.event_id),
-            "payload": json.dumps(stored.to_stream_payload()),
-        },
-    )
-    return stored
+    return EVENT_REPOSITORY.append(session, event)
 
 
 def run() -> None:

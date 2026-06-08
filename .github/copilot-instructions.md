@@ -14,7 +14,7 @@ Use this repo to keep behavior comparable across modes, not to optimize one mode
 
 - Python FastAPI services expose health + submission/event endpoints.
 - PostgreSQL is the source of truth for persisted state and projections.
-- Redis Streams carry async messages (`submission_requests`, `risk_results`, `domain_events`).
+- Redis Streams carry async messages (`submission_requests`, `risk_results`) in microservices mode.
 - UI (`ui/`) is React + TypeScript and routes through nginx gateway.
 
 ## Coding conventions

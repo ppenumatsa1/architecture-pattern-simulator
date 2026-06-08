@@ -57,7 +57,7 @@ curl -sS http://localhost:8080/api/monolith/health
 
 ## 5. Optional async progression (full flow)
 
-Docker Compose already starts all workers/processors/outbox publishers.
+Docker Compose already starts all workers/processors.
 
 Run these locally in separate terminals only for debugging outside Compose:
 
@@ -67,7 +67,6 @@ Run these locally in separate terminals only for debugging outside Compose:
 ./.venv/bin/python microservices/outbox-publisher/worker.py
 ./.venv/bin/python event-sourcing-cqrs/processors/risk_processor.py
 ./.venv/bin/python event-sourcing-cqrs/processors/projection_processor.py
-./.venv/bin/python event-sourcing-cqrs/processors/outbox_publisher.py
 ```
 
 Then submit again in each mode and compare timeline + state in the UI.

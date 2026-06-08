@@ -11,7 +11,7 @@
 ## Data & messaging
 
 - **PostgreSQL 16**: persistent storage for monolith, microservices, and event-sourcing schemas.
-- **Redis 7 (Streams)**: asynchronous transport (`submission_requests`, `risk_results`) and CQRS outbox-published `domain_events`.
+- **Redis 7 (Streams)**: asynchronous transport (`submission_requests`, `risk_results`) for microservices.
 
 ## Edge/routing
 
